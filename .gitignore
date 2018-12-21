@@ -1,5 +1,3 @@
-site/*
-!.gitkeep
-!.gitignore
 .env
+!site/.env
 .DS_Store
