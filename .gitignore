@@ -1,0 +1,5 @@
+site/*
+!.gitkeep
+!.gitignore
+.env
+.DS_Store

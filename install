@@ -1,0 +1,242 @@
+#!/bin/bash
+
+
+# Colors
+GREEN='\033[1;32m' # Green
+RED='\033[1;31m' # Red
+RESET='\033[0m' # No Color
+
+
+
+# Get data from local.env file
+source local.env
+
+
+# COPY THE site/.env FILE IF EXISTS
+if [[ -f site/.env ]] && [[ ! -f .env ]]; then
+
+	cp site/.env .env
+
+fi
+
+
+# Get data from .env file
+if [[ -f .env ]]; then
+
+	source .env
+
+fi
+
+
+# CHECK THE PROJECT STATUS
+
+# If local IP already changed on .env file
+if [[ $IP != 127.0.0.1 ]]; then
+
+
+	# PRINT THE SITE INFO
+	echo ""
+	echo ""
+	echo "== Site Info ===================="
+	echo ""
+	echo "Admin Page: http://${DOMAIN}"
+	echo "IP: ${IP}"
+	echo ""
+	echo "================================="
+	echo ""
+	echo "This project has already been installed."
+
+
+	exit
+
+fi
+
+
+
+# ENTER THE SITE INFO
+
+# Enter the environment information if .env file not exists
+if [[ ! -f .env ]]; then
+
+
+	# Project name
+	read -ep "Project Name (${SLUG}): " slug
+	[[ ! -z "$slug" ]] && SLUG=$slug || echo "Using '${SLUG}'"
+
+
+	# Local domain info
+	read -ep "Domain Name (${DOMAIN}): " domain
+	[[ ! -z "$domain" ]] && DOMAIN=$domain || echo "Using '${DOMAIN}'"
+
+
+	# CHECK THE LOCAL DOMAIN AVAILABILITY
+	echo "Checking '${DOMAIN}' availability..."
+	if grep -q "${DOMAIN}" /etc/hosts; then
+		echo -e "${RED}'${DOMAIN}' Host has already been added. Please remove it before installing.${RESET}"
+		exit
+	fi
+	echo -e "${GREEN}${DOMAIN}${RESET} - AVAILABLE"
+
+
+else
+
+
+	# COPY THE .env FILE IF EXISTS
+	if [[ ! -f site/.env ]]; then
+
+		cp .env site/.env
+
+	fi
+
+
+fi
+
+
+# Confirm the information
+echo ""
+echo ""
+echo "== Installation Info ============"
+echo ""
+echo "Local development domain: $DOMAIN"
+echo "Project name: $SLUG"
+echo ""
+echo "==================================="
+echo ""
+echo ""
+read -ep "Are these correct? (type 'yes' to confirm): " confirm
+
+
+
+
+# IF CONFIRMED, CREATE THE .env file
+if [[ $confirm == yes ]] || [[ $confirm == y ]]; then
+
+	# Create the .env file
+	cp local.env .env
+	echo -e ".env file created ... ${GREEN}done${RESET}"
+
+
+	# Update the .env file
+	sed -i "" "s/DOMAIN=dev.sitename.com/DOMAIN=$DOMAIN/g" .env;
+	sed -i "" "s/SLUG=project-name/SLUG=$SLUG/g" .env;
+
+	echo -e ".env file updated with the new info ... ${GREEN}done${RESET}"
+
+
+	# Copy the .env file to "site/" folder
+	cp .env site/.env
+	echo -e ".env file copied to the 'site/' folder ... ${GREEN}done${RESET}"
+
+
+	# Get data from .env file
+	source .env
+
+else
+
+	# Get out if the information incorrect
+	exit
+
+fi
+
+
+
+
+# CHECK THE LOCAL DOMAIN AVAILABILITY
+echo "Checking '${DOMAIN}' availability..."
+if grep -q "${DOMAIN}" /etc/hosts; then
+	echo -e "${RED}'${DOMAIN}' Host has already been added. Please remove it before installing.${RESET}"
+	exit
+fi
+echo -e "${GREEN}${DOMAIN}${RESET} - AVAILABLE"
+
+
+
+
+# CHECK IP AND CREATE HOST
+echo "Checking IP availability..."
+COUNTER=2
+while [[ $COUNTER -lt 120 ]]; do
+
+	IP="127.0.0.${COUNTER}"
+
+
+	echo "Checking '${IP}' availability..."
+	if grep -q "${IP}" /etc/hosts; then
+		echo "${IP} - NOT AVAILABLE"
+	else
+
+		if curl --max-time 3 --output /dev/null --silent --head --fail "${IP}"; then
+			echo -e "${RED}${IP}${RESET} - NOT AVAILABLE"
+		else
+			echo -e "${GREEN}${IP}${RESET} - AVAILABLE"
+			break
+		fi
+
+	fi
+
+
+	let COUNTER=COUNTER+1
+
+done
+
+# Update the environment file (.env) with the available IP
+sed -i "" "s/IP=127.0.0.1/IP=${IP}/g" .env;
+echo -e "'${IP}' changed as '${IP}' on .env file ... ${GREEN}done${RESET}"
+
+
+# Open that IP slot
+ifconfig lo0 alias $IP up
+echo -e "'${IP}' is now available to build server ... ${GREEN}done${RESET}"
+
+
+
+
+
+
+# Update the file permissions
+echo -e "Local file permissions updating..."
+find site/ -type d -exec chmod 755 {} \;
+find site/ -type f -exec chmod 644 {} \;
+echo -e "File permissions updated ... ${GREEN}done${RESET}"
+
+
+
+
+# BUILD THE SERVER
+echo "Server is building..."
+docker-compose rm &&
+docker-compose pull &&
+docker-compose build --no-cache &&
+docker-compose up -d --force-recreate
+echo -e "Server built ... ${GREEN}done${RESET}"
+
+
+
+# Add the host to the /etc/hosts file
+sudo bash config/etc-hosts.sh -add $DOMAIN $IP
+killall -HUP mDNSResponder
+echo -e "Domain added to local hosts file ... ${GREEN}done${RESET}"
+
+
+
+# Fix the permissions
+echo "Fixing the server permissions..."
+docker-compose exec www chown -R www-data:www-data /var/www/
+docker-compose exec www find /var/www/ -type d -exec chmod 755 {} \;
+docker-compose exec www find /var/www/ -type f -exec chmod 644 {} \;
+echo -e "Server permissions fixed ... ${GREEN}done${RESET}"
+
+
+
+
+# PRINT THE SITE INFO
+echo ""
+echo ""
+echo "== Site Info ===================="
+echo ""
+echo "Admin Page: http://${DOMAIN}"
+echo "IP: ${IP}"
+echo ""
+echo "================================="
+echo ""
+echo -e "${GREEN}Project installed${RESET}"

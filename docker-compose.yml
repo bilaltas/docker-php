@@ -1,0 +1,21 @@
+version: "3.2"
+services:
+    www:
+        #build: .
+        image: php:7.2.8-apache
+        container_name: "${SLUG}-php"
+        restart: on-failure
+        env_file:
+            - ./.env
+        ports:
+            - ${IP}:80:80
+        volumes:
+            - ./config/php.ini:/usr/local/etc/php/php.ini
+            - ./logs:/var/log/apache2
+            - ./site:/var/www/html
+        networks:
+            - default
+volumes:
+    persistent:
+networks:
+    default:
