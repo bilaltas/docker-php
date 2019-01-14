@@ -1,0 +1,62 @@
+#!/bin/bash
+
+
+# Install if not already
+if [[ $IP == 127.0.0.1 ]] || [[ ! -f .env ]]; then
+
+	echo "Redirecting to installation..."
+	bash install
+	exit
+
+fi
+
+
+
+
+# Get data from .env file
+source .env
+
+
+
+
+# Open that IP slot
+ifconfig lo0 alias $IP up
+echo -e "'${IP}' is now available"
+
+
+
+
+# Start the docker containers
+echo "Starting the server..."
+docker-compose up -d
+echo -e "Server is up"
+
+
+
+
+
+# Server permission update
+# bash permission-fix
+
+
+
+
+# PRINT THE SITE INFO
+echo ""
+echo ""
+echo "== Site Info ===================="
+echo ""
+echo "Admin Page: http://${DOMAIN}"
+echo "IP: ${IP}"
+echo ""
+echo "================================="
+echo ""
+echo ""
+
+
+
+# Start the gulp
+(
+	cd site/
+	npm start
+)
